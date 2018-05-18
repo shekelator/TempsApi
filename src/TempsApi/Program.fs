@@ -61,13 +61,16 @@ type TempReading =
     {
         Timestamp : DateTime
         TempF : decimal
+        SensorId : string
     }
 
 let postReading = 
     fun (next : HttpFunc) (ctx : HttpContext) ->
+        let logger = ctx.GetLogger()
         task {
             let! reading = ctx.BindJsonAsync<TempReading>()
 
+            logger.LogInformation(sprintf "Read temp value of %M" reading.TempF)
             // return
             return! Successful.OK reading next ctx
         }
@@ -114,7 +117,7 @@ let configureServices (services : IServiceCollection) =
     services.AddGiraffe() |> ignore
 
 let configureLogging (builder : ILoggingBuilder) =
-    let filter (l : LogLevel) = l.Equals LogLevel.Error
+    let filter (l : LogLevel) = (int)l >= (int)LogLevel.Information
     builder.AddFilter(filter).AddConsole().AddDebug() |> ignore
 
 [<EntryPoint>]
