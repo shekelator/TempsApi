@@ -6,6 +6,12 @@ A [Giraffe](https://github.com/giraffe-fsharp/Giraffe) web application, which ha
 
 ### Windows
 
+Start EventStore:
+```
+EventStore.ClusterNode.exe --db ~/source/repos/eventstore/db --log ~/source/repos/eventstore/logs
+```
+Check out the admin page at http://127.0.0.1:2113
+
 Run the `build.bat` script in order to restore, build and test (if you've selected to include tests) the application:
 
 ```
