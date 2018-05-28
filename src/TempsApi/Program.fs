@@ -9,6 +9,11 @@ open Microsoft.Extensions.Logging
 open Microsoft.Extensions.DependencyInjection
 open Giraffe
 open Microsoft.AspNetCore.Http
+open EventStore.ClientAPI
+open System.Net
+open System.Text
+
+type ILogger = Microsoft.Extensions.Logging.ILogger
 
 // ---------------------------------
 // Models
@@ -49,13 +54,6 @@ module Views =
 // ---------------------------------
 // Web app
 // ---------------------------------
-
-let indexHandler (name : string) =
-    let greetings = sprintf "Hello %s, from Giraffe!" name
-    let model     = { Text = greetings }
-    let view      = Views.index model
-    htmlView view
-
 [<CLIMutable>]
 type TempReading = 
     {
@@ -64,6 +62,25 @@ type TempReading =
         SensorId : string
     }
 
+type ReadingMetadata = 
+    {
+        TimeReceived : DateTime
+    }
+
+let indexHandler (name : string) =
+    let greetings = sprintf "Hello %s, from Giraffe!" name
+    let model     = { Text = greetings }
+    let view      = Views.index model
+    htmlView view
+
+let writeEvent (tempReading : TempReading, esConnection : IEventStoreConnection) =
+    let data = JsonUtil.serialize tempReading |> Encoding.UTF8.GetBytes
+    let metadata = { TimeReceived = DateTime.UtcNow } |> JsonUtil.serialize |> Encoding.UTF8.GetBytes
+
+    let event = new EventData(Guid.NewGuid(), "temperature-reading", true, data, metadata)
+    esConnection.AppendToStreamAsync("temperature-readings", (int64)ExpectedVersion.Any, event).Wait()
+
+
 let postReading = 
     fun (next : HttpFunc) (ctx : HttpContext) ->
         let logger = ctx.GetLogger()
@@ -71,6 +88,7 @@ let postReading =
             let! reading = ctx.BindJsonAsync<TempReading>()
 
             logger.LogInformation(sprintf "Read temp value of %M" reading.TempF)
+            let result = writeEvent(reading, ctx.GetService<IEventStoreConnection>())
             // return
             return! Successful.OK reading next ctx
         }
@@ -113,6 +131,9 @@ let configureApp (app : IApplicationBuilder) =
         .UseGiraffe(webApp)
 
 let configureServices (services : IServiceCollection) =
+    let conn = EventStoreConnection.Create(new IPEndPoint(IPAddress.Loopback, 1113))
+    conn.ConnectAsync().Wait()
+    services.AddSingleton(conn) |> ignore
     services.AddCors()    |> ignore
     services.AddGiraffe() |> ignore
 
